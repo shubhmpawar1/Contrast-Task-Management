@@ -52,6 +52,13 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
   dragCurrentRow = -1;
   dragCurrentCol = -1;
 
+  // Multi-cell selection state
+  isSelectingCells = false;
+  selectionStartRow = -1;
+  selectionStartCol = -1;
+  selectionEndRow = -1;
+  selectionEndCol = -1;
+
   // Cross-sheet linked dropdown state
   linkedDropdownOptions: { label: string; value: string }[] = [];
   linkedDropdownCell: string | null = null;  // e.g. 'B3' when dropdown is open
@@ -132,8 +139,10 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
 
   @HostListener('window:keydown', ['$event'])
   handleKeyboardNavigation(event: KeyboardEvent) {
-    // Handle Ctrl+Z (Undo) — always, even if editing
-    if (event.ctrlKey && event.key === 'z' && !event.shiftKey) {
+    const isCmdOrCtrl = event.ctrlKey || event.metaKey;
+
+    // Handle Ctrl+Z / Cmd+Z (Undo) — always, even if editing
+    if (isCmdOrCtrl && event.key === 'z' && !event.shiftKey) {
       const activeEl = document.activeElement;
       // Only if not typing in formula bar / rename input
       if (!(activeEl && activeEl.id === 'formulaBarInput') && !this.isEditing) {
@@ -143,8 +152,8 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
       }
     }
 
-    // Handle Ctrl+Y or Ctrl+Shift+Z (Redo)
-    if ((event.ctrlKey && event.key === 'y') || (event.ctrlKey && event.shiftKey && event.key === 'z')) {
+    // Handle Ctrl+Y / Cmd+Y or Ctrl+Shift+Z / Cmd+Shift+Z (Redo)
+    if ((isCmdOrCtrl && event.key === 'y') || (isCmdOrCtrl && event.shiftKey && event.key === 'z')) {
       const activeEl = document.activeElement;
       if (!(activeEl && activeEl.id === 'formulaBarInput') && !this.isEditing) {
         event.preventDefault();
@@ -415,17 +424,48 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
     this.saveSubject.next();
   }
 
-  /** Delete the content of the currently selected cell */
+  /** Delete the content of the currently selected cell range */
   deleteActiveCell() {
     if (!this.activeSheet) return;
-    const cells = this.activeSheet.data.cells;
-    const cell = cells[this.activeCellKey];
-    if (!cell || cell.value === '') return; // Nothing to delete
-    // Snapshot before change
+
+    let minRow = this.selectionStartRow;
+    let maxRow = this.selectionEndRow;
+    let minCol = this.selectionStartCol;
+    let maxCol = this.selectionEndCol;
+
+    if (minRow === -1 || minCol === -1) {
+      const match = this.activeCellKey.match(/^([A-Z]+)(\d+)$/);
+      if (!match) return;
+      minRow = maxRow = parseInt(match[2], 10);
+      minCol = maxCol = this.getColIndexFromLabel(match[1]);
+    }
+
+    const startRow = Math.min(minRow, maxRow);
+    const endRow = Math.max(minRow, maxRow);
+    const startCol = Math.min(minCol, maxCol);
+    const endCol = Math.max(minCol, maxCol);
+
     this.pushHistory();
-    cell.value = '';
-    this.editingValue = '';
-    this.triggerChange();
+
+    const cells = this.activeSheet.data.cells;
+    let cellsChanged = false;
+
+    for (let r = startRow; r <= endRow; r++) {
+      for (let c = startCol; c <= endCol; c++) {
+        const colLabel = this.getColLabel(c);
+        const cellKey = `${colLabel}${r}`;
+        const cell = cells[cellKey];
+        if (cell && cell.value !== '') {
+          cell.value = '';
+          cellsChanged = true;
+        }
+      }
+    }
+
+    if (cellsChanged) {
+      this.editingValue = '';
+      this.triggerChange();
+    }
   }
 
   // Mark changes, schedule auto-save
@@ -475,6 +515,12 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
     // Sync editor input
     const cell = this.activeSheet?.data.cells[this.activeCellKey];
     this.editingValue = cell ? cell.value : '';
+
+    // Sync selection range to single active cell
+    this.selectionStartRow = row;
+    this.selectionStartCol = colIndex;
+    this.selectionEndRow = row;
+    this.selectionEndCol = colIndex;
 
     // Check if this column is linked to another sheet (row > 1 only)
     this.linkedDropdownCell = null;
@@ -938,7 +984,63 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
     this.triggerChange();
   }
 
-  // Drag-to-fill handlers
+  // Selection and Drag-to-fill handlers
+  onCellMouseDown(event: MouseEvent, row: number, colIndex: number) {
+    if (event.button !== 0) return; // Left click only
+    this.isSelectingCells = true;
+    this.selectCell(row, colIndex);
+  }
+
+  onRowHeaderMouseDown(event: MouseEvent, row: number) {
+    if (event.button !== 0) return;
+    if (this.isEditing) {
+      this.closeCellEdit();
+    }
+    this.isSelectingCells = true;
+    
+    this.selectionStartRow = row;
+    this.selectionEndRow = row;
+    this.selectionStartCol = 0;
+    this.selectionEndCol = this.colCount - 1;
+
+    const colLabel = this.getColLabel(0);
+    this.activeCellKey = `${colLabel}${row}`;
+    this.isTypingFormula = false;
+    const cell = this.activeSheet?.data.cells[this.activeCellKey];
+    this.editingValue = cell ? cell.value : '';
+  }
+
+  onRowHeaderMouseEnter(row: number) {
+    if (!this.isSelectingCells) return;
+    this.selectionEndRow = row;
+    this.selectionEndCol = this.colCount - 1;
+  }
+
+  onColHeaderMouseDown(event: MouseEvent, colIdx: number) {
+    if (event.button !== 0) return;
+    if (this.isEditing) {
+      this.closeCellEdit();
+    }
+    this.isSelectingCells = true;
+
+    this.selectionStartRow = 1;
+    this.selectionEndRow = this.rowCount;
+    this.selectionStartCol = colIdx;
+    this.selectionEndCol = colIdx;
+
+    const colLabel = this.getColLabel(colIdx);
+    this.activeCellKey = `${colLabel}1`;
+    this.isTypingFormula = false;
+    const cell = this.activeSheet?.data.cells[this.activeCellKey];
+    this.editingValue = cell ? cell.value : '';
+  }
+
+  onColHeaderMouseEnter(colIdx: number) {
+    if (!this.isSelectingCells) return;
+    this.selectionEndCol = colIdx;
+    this.selectionEndRow = this.rowCount;
+  }
+
   onFillHandleMouseDown(event: MouseEvent, row: number, colIndex: number) {
     event.stopPropagation();
     event.preventDefault();
@@ -951,9 +1053,13 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
   }
 
   onCellMouseEnter(row: number, colIndex: number) {
-    if (!this.isDraggingFill) return;
-    this.dragCurrentRow = row;
-    this.dragCurrentCol = colIndex;
+    if (this.isDraggingFill) {
+      this.dragCurrentRow = row;
+      this.dragCurrentCol = colIndex;
+    } else if (this.isSelectingCells) {
+      this.selectionEndRow = row;
+      this.selectionEndCol = colIndex;
+    }
   }
 
   isCellInDragRange(row: number, colIndex: number): boolean {
@@ -982,6 +1088,10 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
 
   @HostListener('window:mouseup', ['$event'])
   onWindowMouseUp(event: MouseEvent) {
+    if (this.isSelectingCells) {
+      this.isSelectingCells = false;
+    }
+
     if (!this.isDraggingFill) return;
     this.isDraggingFill = false;
 
@@ -1152,5 +1262,131 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
       }
     }
     return cells;
+  }
+
+  isCellSelected(row: number, colIndex: number): boolean {
+    if (this.selectionStartRow === -1 || this.selectionStartCol === -1) {
+      const match = this.activeCellKey.match(/^([A-Z]+)(\d+)$/);
+      if (!match) return false;
+      const activeRow = parseInt(match[2], 10);
+      const activeCol = this.getColIndexFromLabel(match[1]);
+      return row === activeRow && colIndex === activeCol;
+    }
+
+    const minRow = Math.min(this.selectionStartRow, this.selectionEndRow);
+    const maxRow = Math.max(this.selectionStartRow, this.selectionEndRow);
+    const minCol = Math.min(this.selectionStartCol, this.selectionEndCol);
+    const maxCol = Math.max(this.selectionStartCol, this.selectionEndCol);
+
+    return row >= minRow && row <= maxRow && colIndex >= minCol && colIndex <= maxCol;
+  }
+
+  @HostListener('window:copy', ['$event'])
+  handleCopy(event: ClipboardEvent) {
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+      return;
+    }
+
+    if (!this.activeSheet) return;
+
+    let minRow = this.selectionStartRow;
+    let maxRow = this.selectionEndRow;
+    let minCol = this.selectionStartCol;
+    let maxCol = this.selectionEndCol;
+
+    if (minRow === -1 || minCol === -1) {
+      const match = this.activeCellKey.match(/^([A-Z]+)(\d+)$/);
+      if (!match) return;
+      minRow = maxRow = parseInt(match[2], 10);
+      minCol = maxCol = this.getColIndexFromLabel(match[1]);
+    }
+
+    const startRow = Math.min(minRow, maxRow);
+    const endRow = Math.max(minRow, maxRow);
+    const startCol = Math.min(minCol, maxCol);
+    const endCol = Math.max(minCol, maxCol);
+
+    const rowsData: string[][] = [];
+    for (let r = startRow; r <= endRow; r++) {
+      const colData: string[] = [];
+      for (let c = startCol; c <= endCol; c++) {
+        colData.push(this.getCellValue(r, c));
+      }
+      rowsData.push(colData);
+    }
+
+    const tsv = rowsData.map(row => row.join('\t')).join('\n');
+    event.clipboardData?.setData('text/plain', tsv);
+    event.preventDefault();
+  }
+
+  @HostListener('window:paste', ['$event'])
+  handlePaste(event: ClipboardEvent) {
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+      return;
+    }
+
+    if (!this.activeSheet) return;
+
+    const tsv = event.clipboardData?.getData('text/plain');
+    if (!tsv) return;
+
+    this.pushHistory();
+
+    const rows = tsv.split(/\r?\n/).map(row => row.split('\t'));
+    
+    let startRow = this.selectionStartRow;
+    let startCol = this.selectionStartCol;
+
+    if (startRow === -1 || startCol === -1) {
+      const match = this.activeCellKey.match(/^([A-Z]+)(\d+)$/);
+      if (!match) return;
+      startRow = parseInt(match[2], 10);
+      startCol = this.getColIndexFromLabel(match[1]);
+    } else {
+      startRow = Math.min(this.selectionStartRow, this.selectionEndRow);
+      startCol = Math.min(this.selectionStartCol, this.selectionEndCol);
+    }
+
+    const cells = this.activeSheet.data.cells;
+    let cellsChanged = false;
+
+    for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+      const targetRow = startRow + rIdx;
+      if (targetRow > this.rowCount) continue;
+
+      const rowValues = rows[rIdx];
+      if (rIdx === rows.length - 1 && rowValues.length === 1 && rowValues[0] === '') {
+        continue;
+      }
+
+      for (let cIdx = 0; cIdx < rowValues.length; cIdx++) {
+        const targetColIndex = startCol + cIdx;
+        if (targetColIndex >= this.colCount) continue;
+
+        const val = rowValues[cIdx];
+        const colLabel = this.getColLabel(targetColIndex);
+        const cellKey = `${colLabel}${targetRow}`;
+
+        if (!cells[cellKey]) {
+          cells[cellKey] = { value: val };
+        } else {
+          cells[cellKey].value = val;
+        }
+
+        this.handleAutoLookup(cellKey, val);
+        cellsChanged = true;
+      }
+    }
+
+    if (cellsChanged) {
+      const currentCell = cells[this.activeCellKey];
+      this.editingValue = currentCell ? currentCell.value : '';
+
+      this.triggerChange();
+      event.preventDefault();
+    }
   }
 }

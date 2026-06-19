@@ -152,7 +152,9 @@
           <th 
             *ngFor="let colIdx of getCols()"
             [style.width]="colWidth"
-            class="sticky top-0 z-20 h-8 bg-slate-900 border-r border-b border-slate-800 text-center font-semibold text-slate-400 select-none uppercase tracking-wider align-middle hover:bg-slate-850 transition duration-150">
+            (mousedown)="onColHeaderMouseDown($event, colIdx)"
+            (mouseenter)="onColHeaderMouseEnter(colIdx)"
+            class="sticky top-0 z-20 h-8 bg-slate-900 border-r border-b border-slate-800 text-center font-semibold text-slate-400 select-none uppercase tracking-wider align-middle hover:bg-slate-850 cursor-pointer transition duration-150">
             {{ getColLabel(colIdx) }}
           </th>
         </tr>
@@ -162,7 +164,9 @@
         <tr *ngFor="let r of getRows()" [ngClass]="r === 1 ? 'bg-slate-800/80' : 'hover:bg-slate-900/30'">
           <!-- Row Number Sticky Label -->
           <td [ngClass]="r === 1 ? 'bg-slate-800 text-emerald-400' : 'bg-slate-900 text-slate-400'"
-              class="sticky left-0 z-20 w-12 border-r border-b border-slate-800 font-mono text-center font-bold select-none shadow-[2px_0_4px_rgba(0,0,0,0.3)] flex items-center justify-center align-middle hover:bg-slate-850 transition duration-150"
+              (mousedown)="onRowHeaderMouseDown($event, r)"
+              (mouseenter)="onRowHeaderMouseEnter(r)"
+              class="sticky left-0 z-20 w-12 border-r border-b border-slate-800 font-mono text-center font-bold select-none shadow-[2px_0_4px_rgba(0,0,0,0.3)] flex items-center justify-center align-middle hover:bg-slate-850 cursor-pointer transition duration-150"
               [style.height]="rowHeight">
             {{ r === 1 ? 'H' : r - 1 }}
           </td>
@@ -170,7 +174,7 @@
           <!-- Input Cells -->
           <td
             *ngFor="let c of getCols()"
-            (click)="selectCell(r, c)"
+            (mousedown)="onCellMouseDown($event, r, c)"
             (dblclick)="doubleClickCell(r, c)"
             (mouseenter)="onCellMouseEnter(r, c)"
             [style]="getCellStyles(r, c)"
@@ -178,6 +182,7 @@
             [style.width]="colWidth"
             [ngClass]="{
               'outline outline-2 outline-emerald-500 outline-offset-[-2px] z-10 shadow-[0_0_8px_rgba(16,185,129,0.3)]': activeCellKey === getColLabel(c) + r && !isDraggingFill,
+              'bg-emerald-500/10 z-10 border border-emerald-500/30': isCellSelected(r, c) && activeCellKey !== getColLabel(c) + r && !isDraggingFill,
               'outline outline-2 outline-dashed outline-blue-400 bg-blue-500/10 z-10': isCellInDragRange(r, c),
               'bg-slate-800/60 font-bold text-emerald-300': r === 1 && !getCellStyles(r, c)['background-color']
             }"
