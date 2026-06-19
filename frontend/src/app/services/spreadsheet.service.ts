@@ -39,7 +39,8 @@ export interface Sheet {
 })
 export class SpreadsheetService {
   private http = inject(HttpClient);
-  private apiUrl = 'http://localhost:3000/api/sheets';
+  private apiUrl = 'https://contrast-task-management-1.onrender.com/api/sheets';
+  private tablesUrl = 'https://contrast-task-management-1.onrender.com/api/tables';
 
   getSheets(): Observable<SheetListItem[]> {
     return this.http.get<SheetListItem[]>(this.apiUrl);
@@ -64,7 +65,7 @@ export class SpreadsheetService {
   /** Fetch all rows from a real table — used to populate cross-sheet dropdowns */
   getTableValues(tableName: string): Observable<{ columns: string[]; rows: Record<string, string>[] }> {
     return this.http.get<{ columns: string[]; rows: Record<string, string>[] }>(
-      `http://localhost:3000/api/tables/${tableName}/values`
+      `${this.tablesUrl}/${tableName}/values`
     );
   }
 }
