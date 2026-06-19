@@ -20,6 +20,8 @@ export interface SheetCell {
 export interface SheetData {
   rows: number;
   cols: number;
+  colWidths?: { [key: number]: number };
+  rowHeights?: { [key: number]: number };
   headers?: string[];       // column header labels e.g. ['Sr No', 'Module', 'UI Status']
   statusCols?: number[];    // 0-based col indices that render as status dropdowns
   readonlyCols?: number[];  // 0-based col indices that are read-only (e.g. Sr No)

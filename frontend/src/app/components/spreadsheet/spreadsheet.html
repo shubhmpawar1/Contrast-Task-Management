@@ -148,15 +148,20 @@
         <tr class="bg-slate-900">
           <!-- Corner Cell -->
           <th class="sticky left-0 top-0 z-30 w-12 h-8 bg-slate-950 border-r border-b border-slate-800 flex items-center justify-center select-none shadow-[2px_2px_4px_rgba(0,0,0,0.3)]"></th>
-          
-          <!-- Column letters -->
+              <!-- Column letters -->
           <th 
             *ngFor="let colIdx of getCols()"
-            [style.width]="colWidth"
+            [style.width]="getColWidth(colIdx)"
             (mousedown)="onColHeaderMouseDown($event, colIdx)"
             (mouseenter)="onColHeaderMouseEnter(colIdx)"
-            class="sticky top-0 z-20 h-8 bg-slate-900 border-r border-b border-slate-800 text-center font-semibold text-slate-400 select-none uppercase tracking-wider align-middle hover:bg-slate-850 cursor-pointer transition duration-150">
+            class="sticky top-0 z-20 h-8 bg-slate-900 border-r border-b border-slate-800 text-center font-semibold text-slate-400 select-none uppercase tracking-wider align-middle hover:bg-slate-850 cursor-pointer transition duration-150 relative">
             {{ getColLabel(colIdx) }}
+            <!-- Resize handle -->
+            <div 
+              (mousedown)="startColResize($event, colIdx)"
+              (click)="$event.stopPropagation()"
+              class="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-emerald-500/50 active:bg-emerald-500 z-30 transition-colors">
+            </div>
           </th>
         </tr>
       </thead>
@@ -167,9 +172,15 @@
           <td [ngClass]="r === 1 ? 'bg-slate-800 text-emerald-400' : 'bg-slate-900 text-slate-400'"
               (mousedown)="onRowHeaderMouseDown($event, r)"
               (mouseenter)="onRowHeaderMouseEnter(r)"
-              class="sticky left-0 z-20 w-12 border-r border-b border-slate-800 font-mono text-center font-bold select-none shadow-[2px_0_4px_rgba(0,0,0,0.3)] flex items-center justify-center align-middle hover:bg-slate-850 cursor-pointer transition duration-150"
-              [style.height]="rowHeight">
+              class="sticky left-0 z-20 w-12 border-r border-b border-slate-800 font-mono text-center font-bold select-none shadow-[2px_0_4px_rgba(0,0,0,0.3)] flex items-center justify-center align-middle hover:bg-slate-850 cursor-pointer transition duration-150 relative"
+              [style.height]="getRowHeight(r)">
             {{ r === 1 ? 'H' : r - 1 }}
+            <!-- Resize handle -->
+            <div 
+              (mousedown)="startRowResize($event, r)"
+              (click)="$event.stopPropagation()"
+              class="absolute bottom-0 left-0 w-full h-1 cursor-row-resize hover:bg-emerald-500/50 active:bg-emerald-500 z-30 transition-colors">
+            </div>
           </td>
 
           <!-- Input Cells -->
@@ -179,8 +190,8 @@
             (dblclick)="doubleClickCell(r, c)"
             (mouseenter)="onCellMouseEnter(r, c)"
             [style]="getCellStyles(r, c)"
-            [style.height]="rowHeight"
-            [style.width]="colWidth"
+            [style.height]="getRowHeight(r)"
+            [style.width]="getColWidth(c)"
             [ngClass]="{
               'outline outline-2 outline-emerald-500 outline-offset-[-2px] z-10 shadow-[0_0_8px_rgba(16,185,129,0.3)]': activeCellKey === getColLabel(c) + r && !isDraggingFill,
               'bg-emerald-500/10 z-10 border border-emerald-500/30': isCellSelected(r, c) && activeCellKey !== getColLabel(c) + r && !isDraggingFill,
@@ -191,8 +202,8 @@
 
             <!-- Header row indicator on first empty cell -->
             <div *ngIf="r === 1 && !getCellValue(r, c) && c === 0 && activeCellKey !== 'A1'"
-                 class="absolute inset-0 flex items-center px-2 pointer-events-none">
-              <span class="text-slate-600 italic text-[10px]">type column name...</span>
+                 class="absolute inset-0 flex items-center px-2 pointer-events-none overflow-hidden">
+              <span class="text-slate-600 italic text-[10px] whitespace-nowrap overflow-hidden text-ellipsis w-full block">type column name...</span>
             </div>
 
             <!-- Cell content -->
@@ -200,7 +211,7 @@
                  class="w-full h-full py-1 text-left whitespace-nowrap overflow-hidden text-ellipsis select-none"
                  [class.font-bold]="r === 1"
                  [class.text-emerald-300]="r === 1 && getCellValue(r, c)">
-              {{ getCellValue(r, c) }}
+               {{ getCellValue(r, c) }}
             </div>
 
             <!-- Inline editor -->

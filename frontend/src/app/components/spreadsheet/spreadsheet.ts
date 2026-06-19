@@ -59,6 +59,19 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
   selectionEndRow = -1;
   selectionEndCol = -1;
 
+  // Custom column widths and row heights
+  colWidths: { [key: number]: number } = {};
+  rowHeights: { [key: number]: number } = {};
+
+  // Drag resizing states
+  isResizingCol = false;
+  resizingColIdx = -1;
+  isResizingRow = false;
+  resizingRowIdx = -1;
+  resizeStartX = 0;
+  resizeStartY = 0;
+  resizeStartSize = 0;
+
   // Cross-sheet linked dropdown state
   linkedDropdownOptions: { label: string; value: string }[] = [];
   linkedDropdownCell: string | null = null;  // e.g. 'B3' when dropdown is open
@@ -264,6 +277,8 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
         this.activeSheet = sheet;
         this.rowCount = sheet.data.rows || 100;
         this.colCount = sheet.data.cols || 52;
+        this.colWidths = sheet.data.colWidths || {};
+        this.rowHeights = sheet.data.rowHeights || {};
         this.activeCellKey = 'A1';
         this.isEditing = false;
         
@@ -372,6 +387,8 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
       data: {
         rows: this.rowCount,
         cols: this.colCount,
+        colWidths: this.colWidths,
+        rowHeights: this.rowHeights,
         cells: this.activeSheet.data.cells
       }
     };
@@ -999,6 +1016,36 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
     return styles;
   }
 
+  getColWidth(colIdx: number): string {
+    const w = this.colWidths[colIdx];
+    return w ? `${w}px` : this.colWidth;
+  }
+
+  getRowHeight(row: number): string {
+    const h = this.rowHeights[row];
+    return h ? `${h}px` : this.rowHeight;
+  }
+
+  startColResize(event: MouseEvent, colIdx: number) {
+    event.stopPropagation();
+    event.preventDefault();
+    this.isResizingCol = true;
+    this.resizingColIdx = colIdx;
+    this.resizeStartX = event.clientX;
+    const currentWidthStr = this.getColWidth(colIdx);
+    this.resizeStartSize = parseInt(currentWidthStr, 10);
+  }
+
+  startRowResize(event: MouseEvent, row: number) {
+    event.stopPropagation();
+    event.preventDefault();
+    this.isResizingRow = true;
+    this.resizingRowIdx = row;
+    this.resizeStartY = event.clientY;
+    const currentHeightStr = this.getRowHeight(row);
+    this.resizeStartSize = parseInt(currentHeightStr, 10);
+  }
+
   // Grid resizing
   addRow() {
     this.rowCount++;
@@ -1112,10 +1159,29 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
     }
   }
 
+  @HostListener('window:mousemove', ['$event'])
+  onWindowMouseMove(event: MouseEvent) {
+    if (this.isResizingCol) {
+      const deltaX = event.clientX - this.resizeStartX;
+      const newWidth = Math.max(40, this.resizeStartSize + deltaX);
+      this.colWidths[this.resizingColIdx] = newWidth;
+    } else if (this.isResizingRow) {
+      const deltaY = event.clientY - this.resizeStartY;
+      const newHeight = Math.max(18, this.resizeStartSize + deltaY);
+      this.rowHeights[this.resizingRowIdx] = newHeight;
+    }
+  }
+
   @HostListener('window:mouseup', ['$event'])
   onWindowMouseUp(event: MouseEvent) {
     if (this.isSelectingCells) {
       this.isSelectingCells = false;
+    }
+
+    if (this.isResizingCol || this.isResizingRow) {
+      this.isResizingCol = false;
+      this.isResizingRow = false;
+      this.triggerChange();
     }
 
     if (!this.isDraggingFill) return;
