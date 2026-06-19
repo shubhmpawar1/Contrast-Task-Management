@@ -1,0 +1,331 @@
+<div class="flex flex-col h-screen w-screen bg-slate-900 text-slate-100 font-sans overflow-hidden select-none">
+  
+  <!-- 1. Header Bar -->
+  <header class="flex items-center justify-between px-6 py-3 bg-slate-950 border-b border-slate-800">
+    <div class="flex items-center space-x-3">
+      <!-- Grid icon -->
+      <div class="p-2 bg-emerald-600 rounded-lg shadow-lg shadow-emerald-900/30">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-9v14m-5-14v14m10-14v14" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Contrast Task Management</h1>
+        <p class="text-xs text-slate-400">
+          Node.js + PostgreSQL
+          <span *ngIf="activeSheet?.table_name" class="ml-1 font-mono text-emerald-500">
+            → table: <strong>{{ activeSheet?.table_name }}</strong>
+          </span>
+        </p>
+      </div>
+    </div>
+
+    <!-- DB Sync / Save Status -->
+    <div class="flex items-center space-x-3">
+      <div class="flex items-center space-x-2 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-800">
+        <!-- Status dot -->
+        <span class="relative flex h-2.5 w-2.5">
+          <span *ngIf="saveStatus === 'saving'" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+          <span [ngClass]="{
+            'bg-emerald-500': saveStatus === 'saved',
+            'bg-amber-400': saveStatus === 'saving',
+            'bg-rose-500': saveStatus === 'unsaved'
+          }" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
+        </span>
+        <span class="text-xs font-medium text-slate-300 uppercase tracking-wider">
+          {{ saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : 'Unsaved' }}
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. Combined Toolbar & Formula Bar -->
+  <div class="flex flex-wrap items-center gap-3 px-6 py-2 bg-slate-900 border-b border-slate-800">
+    <!-- Font Style Controls -->
+    <div class="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-1">
+      <button 
+        (click)="toggleBold()"
+        [ngClass]="activeSheet?.data?.cells?.[activeCellKey]?.bold ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'"
+        title="Bold"
+        class="p-1.5 rounded transition duration-150 font-bold w-8 h-8 flex items-center justify-center">
+        B
+      </button>
+      <button 
+        (click)="toggleItalic()"
+        [ngClass]="activeSheet?.data?.cells?.[activeCellKey]?.italic ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'"
+        title="Italic"
+        class="p-1.5 rounded transition duration-150 italic w-8 h-8 flex items-center justify-center">
+        I
+      </button>
+    </div>
+
+    <!-- Text Color Select -->
+    <div class="relative group">
+      <div class="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-1">
+        <span class="text-xs text-slate-400 px-2 font-medium">Text Color</span>
+        <div class="flex gap-1 pr-1.5">
+          <button 
+            *ngFor="let tc of textColors" 
+            (click)="setTextColor(tc.hex)"
+            [title]="tc.label"
+            [style.background-color]="tc.hex"
+            class="w-4 h-4 rounded-full border border-slate-700 hover:scale-125 transition-transform duration-150">
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Background Color Select -->
+    <div class="relative group">
+      <div class="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-1">
+        <span class="text-xs text-slate-400 px-2 font-medium">Fill Color</span>
+        <div class="flex gap-1 pr-1.5">
+          <button 
+            *ngFor="let bgc of bgColors" 
+            (click)="setBgColor(bgc.hex)"
+            [title]="bgc.label"
+            [style.background-color]="bgc.hex"
+            class="w-4 h-4 rounded-full border border-slate-700 hover:scale-125 transition-transform duration-150">
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="h-6 w-px bg-slate-800 self-center"></div>
+
+    <!-- Grid Size Operations -->
+    <div class="flex items-center space-x-2">
+      <button 
+        (click)="addRow()"
+        class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-semibold tracking-wide transition duration-150 shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+        <span>Add Row</span>
+      </button>
+      <button 
+        (click)="addColumn()"
+        class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-semibold tracking-wide transition duration-150 shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+        <span>Add Column</span>
+      </button>
+    </div>
+
+    <!-- Divider -->
+    <div class="h-6 w-px bg-slate-800 self-center"></div>
+
+    <!-- Formula Input & Active Cell -->
+    <div class="flex items-center space-x-2 flex-1 min-w-[280px]">
+      <!-- Active Cell Address indicator -->
+      <div class="flex items-center justify-center font-mono text-sm font-semibold text-emerald-400 bg-slate-950 border border-slate-800 px-3 py-1 rounded min-w-[50px] shadow-inner text-center">
+        {{ activeCellKey }}
+      </div>
+      
+      <!-- Formula Prefix -->
+      <div class="text-slate-500 italic font-serif select-none px-1 text-sm font-bold">fx</div>
+
+      <!-- Formula / Cell Value Editor Input -->
+      <input 
+        id="formulaBarInput"
+        type="text"
+        [(ngModel)]="editingValue"
+        (input)="onFormulaBarChange()"
+        [placeholder]="isHeaderRow ? '📌 Column name — becomes a database column in table: ' + (activeSheet?.table_name || '...') : 'Enter text, number or formula like =SUM(A1:A5), =A1+B2'"
+        class="flex-1 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded px-3 py-1.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none transition duration-150 shadow-inner font-mono"
+      />
+    </div>
+  </div>
+
+  <!-- 4. Main Spreadsheet Grid Workspace -->
+  <div #gridContainer class="flex-1 overflow-auto bg-slate-950 relative">
+    <table class="border-collapse table-fixed w-max text-left text-xs min-w-full">
+      <thead>
+        <!-- Sticky top header row for column letters -->
+        <tr class="bg-slate-900">
+          <!-- Corner Cell -->
+          <th class="sticky left-0 top-0 z-30 w-12 h-8 bg-slate-950 border-r border-b border-slate-800 flex items-center justify-center select-none shadow-[2px_2px_4px_rgba(0,0,0,0.3)]"></th>
+          
+          <!-- Column letters -->
+          <th 
+            *ngFor="let colIdx of getCols()"
+            [style.width]="colWidth"
+            class="sticky top-0 z-20 h-8 bg-slate-900 border-r border-b border-slate-800 text-center font-semibold text-slate-400 select-none uppercase tracking-wider align-middle hover:bg-slate-850 transition duration-150">
+            {{ getColLabel(colIdx) }}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Data Rows -->
+        <tr *ngFor="let r of getRows()" [ngClass]="r === 1 ? 'bg-slate-800/80' : 'hover:bg-slate-900/30'">
+          <!-- Row Number Sticky Label -->
+          <td [ngClass]="r === 1 ? 'bg-slate-800 text-emerald-400' : 'bg-slate-900 text-slate-400'"
+              class="sticky left-0 z-20 w-12 border-r border-b border-slate-800 font-mono text-center font-bold select-none shadow-[2px_0_4px_rgba(0,0,0,0.3)] flex items-center justify-center align-middle hover:bg-slate-850 transition duration-150"
+              [style.height]="rowHeight">
+            {{ r === 1 ? 'H' : r - 1 }}
+          </td>
+
+          <!-- Input Cells -->
+          <td
+            *ngFor="let c of getCols()"
+            (click)="selectCell(r, c)"
+            (dblclick)="doubleClickCell(r, c)"
+            (mouseenter)="onCellMouseEnter(r, c)"
+            [style]="getCellStyles(r, c)"
+            [style.height]="rowHeight"
+            [style.width]="colWidth"
+            [ngClass]="{
+              'outline outline-2 outline-emerald-500 outline-offset-[-2px] z-10 shadow-[0_0_8px_rgba(16,185,129,0.3)]': activeCellKey === getColLabel(c) + r && !isDraggingFill,
+              'outline outline-2 outline-dashed outline-blue-400 bg-blue-500/10 z-10': isCellInDragRange(r, c),
+              'bg-slate-800/60 font-bold text-emerald-300': r === 1 && !getCellStyles(r, c)['background-color']
+            }"
+            class="relative border-r border-b border-slate-800 px-2 cursor-cell transition duration-100 align-middle font-mono text-slate-200">
+
+            <!-- Header row indicator on first empty cell -->
+            <div *ngIf="r === 1 && !getCellValue(r, c) && c === 0 && activeCellKey !== 'A1'"
+                 class="absolute inset-0 flex items-center px-2 pointer-events-none">
+              <span class="text-slate-600 italic text-[10px]">type column name...</span>
+            </div>
+
+            <!-- Cell content -->
+            <div *ngIf="!(isEditing && activeCellKey === getColLabel(c) + r)"
+                 class="w-full h-full py-1 text-left whitespace-nowrap overflow-hidden text-ellipsis select-none"
+                 [class.font-bold]="r === 1"
+                 [class.text-emerald-300]="r === 1 && getCellValue(r, c)">
+              {{ getCellValue(r, c) }}
+            </div>
+
+            <!-- Inline editor -->
+            <input
+              #cellInput
+              *ngIf="isEditing && activeCellKey === getColLabel(c) + r"
+              type="text"
+              [(ngModel)]="editingValue"
+              (blur)="onCellInputBlur()"
+              (keydown)="onCellInputKeyDown($event)"
+              [class.text-emerald-300]="r === 1"
+              class="absolute inset-0 w-full h-full bg-slate-900 border-2 border-emerald-500 text-slate-100 font-mono px-2 outline-none focus:ring-0 text-left z-20 align-middle"
+            />
+
+            <!-- Fill Handle -->
+            <div
+              *ngIf="activeCellKey === getColLabel(c) + r && !isEditing"
+              (mousedown)="onFillHandleMouseDown($event, r, c)"
+              title="Drag to fill"
+              class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border border-slate-950 cursor-crosshair z-30 translate-x-1/2 translate-y-1/2 hover:scale-125 transition-transform duration-100">
+            </div>
+
+            <!-- Linked Sheet Dropdown -->
+            <div
+              *ngIf="linkedDropdownCell === getColLabel(c) + r"
+              class="absolute top-full left-0 z-50 min-w-[180px] mt-0.5 bg-slate-900 border border-emerald-600 rounded-lg shadow-2xl shadow-black/50 overflow-hidden"
+              (click)="$event.stopPropagation()">
+              <!-- Loading state -->
+              <div *ngIf="linkedDropdownLoading" class="px-3 py-2 text-xs text-slate-400 flex items-center gap-2">
+                <div class="animate-spin h-3 w-3 border border-emerald-500 border-t-transparent rounded-full"></div>
+                Loading values...
+              </div>
+              <!-- Empty state -->
+              <div *ngIf="!linkedDropdownLoading && linkedDropdownOptions.length === 0"
+                   class="px-3 py-2 text-xs text-slate-500 italic">
+                No data in linked sheet yet
+              </div>
+              <!-- Options -->
+              <div *ngIf="!linkedDropdownLoading && linkedDropdownOptions.length > 0"
+                   class="flex flex-col">
+                <div class="px-3 py-1.5 text-[10px] text-emerald-500 font-semibold uppercase tracking-wider border-b border-slate-800">
+                  Select Users
+                </div>
+                <div class="max-h-40 overflow-y-auto">
+                  <div
+                    *ngFor="let opt of linkedDropdownOptions"
+                    (click)="toggleLinkedValue(opt.value)"
+                    class="flex items-center space-x-2.5 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 cursor-pointer transition-colors duration-100 font-mono">
+                    <input
+                      type="checkbox"
+                      [checked]="isOptionSelected(opt.value)"
+                      (click)="$event.stopPropagation(); toggleLinkedValue(opt.value)"
+                      class="h-3.5 w-3.5 rounded border-slate-700 bg-slate-800 text-emerald-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                    />
+                    <span class="select-none">{{ opt.label }}</span>
+                  </div>
+                </div>
+                <!-- Done / Apply Button -->
+                <div class="p-1.5 bg-slate-950 border-t border-slate-800 flex justify-end">
+                  <button
+                    (click)="closeLinkedDropdown()"
+                    class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold tracking-wide transition duration-150 shadow-sm w-full text-center">
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    
+
+  </div>
+
+  <!-- 5. Sheet Tabs Bar at the Bottom -->
+  <footer class="flex items-center justify-between px-6 py-2 bg-slate-950 border-t border-slate-800 text-slate-300">
+    <div #tabsContainer class="flex items-center space-x-1.5 overflow-x-auto pr-4 scrollbar-none">
+      
+      <!-- Sheets tabs list -->
+      <ng-container *ngFor="let s of sheets">
+        <!-- Normal view Tab -->
+        <div 
+          *ngIf="renameSheetId !== s.id"
+          (click)="selectSheet(s.id)"
+          (dblclick)="startRenameSheet(s.id, s.name, $event)"
+          [ngClass]="activeSheet?.id === s.id ? 'bg-slate-900 border-t-2 border-t-emerald-500 border-x border-slate-800 text-emerald-400 font-bold shadow-lg shadow-emerald-500/5' : 'bg-slate-950 hover:bg-slate-900 text-slate-400 border border-transparent hover:text-slate-200'"
+          class="group flex items-center space-x-2 px-4 py-1.5 rounded-t-lg text-xs font-semibold cursor-pointer transition duration-150 border-b border-b-transparent max-w-[150px]">
+          <span class="truncate">{{ s.name }}</span>
+          
+          <!-- Delete Sheet Button (only shown on hover) -->
+          <button 
+            (click)="deleteSheet(s.id, $event)"
+            title="Delete Sheet"
+            class="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-500 p-0.5 rounded transition duration-150">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Inline rename input -->
+        <div 
+          *ngIf="renameSheetId === s.id"
+          class="bg-slate-900 border-x border-slate-800 px-2 py-1.5 rounded-t-lg flex items-center">
+          <input 
+            type="text" 
+            [(ngModel)]="renameSheetName"
+            (blur)="finishRenameSheet()"
+            (keydown.enter)="finishRenameSheet()"
+            (keydown.escape)="renameSheetId = null"
+            class="bg-slate-950 border border-emerald-500 focus:outline-none rounded px-2 py-0.5 text-xs text-slate-100 font-mono w-[100px] text-center"
+            autofocus
+          />
+        </div>
+      </ng-container>
+
+      <!-- Add Sheet Button "+" -->
+      <button 
+        (click)="addSheet()"
+        title="Add New Sheet"
+        class="flex items-center justify-center p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-emerald-400 rounded-lg transition duration-150 shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Help Tip -->
+    <div class="text-[10px] text-slate-500 hidden sm:block select-none font-medium italic">
+      Tip: <span class="text-emerald-600">Row 1 = database columns.</span> Double-click tab to rename (renames DB table too). Drag corner to fill.
+    </div>
+  </footer>
+</div>
