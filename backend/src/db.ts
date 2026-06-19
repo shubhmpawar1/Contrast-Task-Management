@@ -4,13 +4,21 @@ dotenv.config();
 
 const { Pool } = pg;
 
-export const pool = new Pool({
-  user: process.env.DB_USER || 'srp',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_DATABASE || 'excel_db',
-  password: process.env.DB_PASSWORD || '',
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-});
+// Render provides a single DATABASE_URL — use it if available, else fall back to individual vars
+export const pool = new Pool(
+  process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false } // Required for Render PostgreSQL
+      }
+    : {
+        user: process.env.DB_USER || 'srp',
+        host: process.env.DB_HOST || 'localhost',
+        database: process.env.DB_DATABASE || 'excel_db',
+        password: process.env.DB_PASSWORD || '',
+        port: parseInt(process.env.DB_PORT || '5432', 10),
+      }
+);
 
 export const query = (text: string, params?: any[]) => pool.query(text, params);
 
