@@ -77,13 +77,15 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
   ];
 
   bgColors = [
-    { label: 'White', class: 'bg-white', hex: '#ffffff' },
-    { label: 'Light Slate', class: 'bg-slate-100', hex: '#f1f5f9' },
-    { label: 'Light Blue', class: 'bg-blue-50', hex: '#eff6ff' },
-    { label: 'Light Green', class: 'bg-emerald-50', hex: '#ecfdf5' },
-    { label: 'Light Red', class: 'bg-red-50', hex: '#fef2f2' },
-    { label: 'Light Yellow', class: 'bg-amber-50', hex: '#fefbeb' },
-    { label: 'Light Purple', class: 'bg-purple-50', hex: '#faf5ff' }
+    { label: 'None', class: 'bg-transparent', hex: '' },
+    { label: 'Slate', class: 'bg-slate-650', hex: '#475569' },
+    { label: 'Blue', class: 'bg-blue-600', hex: '#2563eb' },
+    { label: 'Green', class: 'bg-emerald-600', hex: '#10b981' },
+    { label: 'Teal', class: 'bg-teal-600', hex: '#0d9488' },
+    { label: 'Red', class: 'bg-rose-700', hex: '#be123c' },
+    { label: 'Orange', class: 'bg-orange-500', hex: '#f97316' },
+    { label: 'Yellow', class: 'bg-amber-500', hex: '#f59e0b' },
+    { label: 'Purple', class: 'bg-purple-600', hex: '#8b5cf6' }
   ];
 
   @ViewChild('cellInput') cellInputEl?: ElementRef<HTMLInputElement>;
@@ -943,16 +945,40 @@ export class SpreadsheetComponent implements OnInit, AfterViewChecked, AfterView
 
   private updateCellFormatting(formatFn: (cell: SheetCell) => void) {
     if (!this.activeSheet) return;
-    
-    const cells = this.activeSheet.data.cells;
-    let cell = cells[this.activeCellKey];
-    
-    if (!cell) {
-      cell = { value: '' };
-      cells[this.activeCellKey] = cell;
+
+    let minRow = this.selectionStartRow;
+    let maxRow = this.selectionEndRow;
+    let minCol = this.selectionStartCol;
+    let maxCol = this.selectionEndCol;
+
+    if (minRow === -1 || minCol === -1) {
+      const match = this.activeCellKey.match(/^([A-Z]+)(\d+)$/);
+      if (!match) return;
+      minRow = maxRow = parseInt(match[2], 10);
+      minCol = maxCol = this.getColIndexFromLabel(match[1]);
     }
-    
-    formatFn(cell);
+
+    const startRow = Math.min(minRow, maxRow);
+    const endRow = Math.max(minRow, maxRow);
+    const startCol = Math.min(minCol, maxCol);
+    const endCol = Math.max(minCol, maxCol);
+
+    this.pushHistory();
+
+    const cells = this.activeSheet.data.cells;
+    for (let r = startRow; r <= endRow; r++) {
+      for (let c = startCol; c <= endCol; c++) {
+        const colLabel = this.getColLabel(c);
+        const cellKey = `${colLabel}${r}`;
+        let cell = cells[cellKey];
+        if (!cell) {
+          cell = { value: '' };
+          cells[cellKey] = cell;
+        }
+        formatFn(cell);
+      }
+    }
+
     this.triggerChange();
   }
 

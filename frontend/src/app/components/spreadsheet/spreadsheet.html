@@ -84,8 +84,9 @@
             *ngFor="let bgc of bgColors" 
             (click)="setBgColor(bgc.hex)"
             [title]="bgc.label"
-            [style.background-color]="bgc.hex"
-            class="w-4 h-4 rounded-full border border-slate-700 hover:scale-125 transition-transform duration-150">
+            [style.background-color]="bgc.hex ? bgc.hex : 'transparent'"
+            [ngClass]="bgc.hex ? '' : 'relative border-dashed border-red-500 after:content-[\'\'] after:absolute after:inset-0 after:m-auto after:w-full after:h-px after:bg-red-500 after:rotate-45'"
+            class="w-4 h-4 rounded-full border border-slate-700 hover:scale-125 transition-transform duration-150 flex items-center justify-center overflow-hidden">
           </button>
         </div>
       </div>
